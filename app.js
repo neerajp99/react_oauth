@@ -4,6 +4,8 @@ const FacebookStrategy = require("passport-facebook").Strategy;
 const cors = require("cors");
 const keys = require("./config/keys");
 
+// Bring in cookie session
+const cookieSession = require("cookie-session");
 // Bring in body-parser middleware
 const bodyParser = require("body-parser");
 // Create an empty object for user details
@@ -45,6 +47,16 @@ mongoose
 // Initialize passport
 app.use(passport.initialize());
 
+// Use cookie session
+app.use(
+  cookieSession({
+    maxAge: 24 * 60 * 60 * 1000,
+    keys: [keys.cookieKey]
+  })
+);
+
+app.use(passport.session());
+
 // Use cors for making cross origin requests
 // app.use(cors);
 
@@ -62,6 +74,7 @@ passport.use(
     (accessToken, refreshToken, profile, done) => {
       console.log(JSON.stringify(profile));
       user = { ...profile };
+      done(null, user);
     }
   )
 );
@@ -92,7 +105,8 @@ app.get(
   "/auth/facebook/callback",
   passport.authenticate("facebook"),
   (req, res) => {
-    // res.json("Welcome " + user.displayName);
+    res.send(req.user);
+    res.json("Welcome " + user.displayName);
     FacebookUser.findOne({
       facebookId: user.id
     }).then(user => {
@@ -117,14 +131,16 @@ app.get(
   }
 );
 
-// serializeUser to determine the data of the user object to be stored in the session
+// serialize user to determine the data of the user object to be stored in the session
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
 
 // Take the id and the user from the ID
-passport.deserializeUser((user, done) => {
-  done(null, user);
+passport.deserializeUser((id, done) => {
+  FacebookUser.findById(id).then(user => {
+    done(null, user);
+  });
 });
 
 // Use route
