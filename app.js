@@ -3,6 +3,7 @@ const passport = require("passport");
 const FacebookStrategy = require("passport-facebook").Strategy;
 const cors = require("cors");
 const keys = require("./config/keys");
+const session = require("express-session");
 
 // Bring in cookie session
 const cookieSession = require("cookie-session");
@@ -46,6 +47,7 @@ mongoose
 
 // Initialize passport
 app.use(passport.initialize());
+app.use(passport.session());
 
 // Use cookie session
 app.use(
@@ -54,8 +56,6 @@ app.use(
     keys: [keys.cookieKey]
   })
 );
-
-app.use(passport.session());
 
 // Use cors for making cross origin requests
 // app.use(cors);
@@ -72,9 +72,33 @@ passport.use(
       callbackURL: "/auth/facebook/callback"
     },
     (accessToken, refreshToken, profile, done) => {
-      console.log(JSON.stringify(profile));
+      // console.log(JSON.stringify(profile));
       user = { ...profile };
-      done(null, user);
+      FacebookUser.findOne({
+        facebookId: user.id
+      })
+        .then(user => {
+          if (user) {
+            // res.status(400).json("User already exists")
+            console.log("User already exists");
+            done(null, user);
+          } else {
+            const newFacebookUser = new FacebookUser({
+              user: user.displayName,
+              facebookId: user.id
+            })
+              .save()
+              .then(user => {
+                done(null, user);
+              })
+              .catch(err => {
+                console.log(err);
+              });
+          }
+        })
+        .catch(error => {
+          console.log(error);
+        });
     }
   )
 );
@@ -103,50 +127,36 @@ app.get("/auth/facebook", passport.authenticate("facebook"));
 
 app.get(
   "/auth/facebook/callback",
-  passport.authenticate("facebook"),
+  passport.authenticate("facebook", { failureRedirect: "/login" }),
   (req, res) => {
-    res.send(req.user);
-    res.json("Welcome " + user.displayName);
-    FacebookUser.findOne({
-      facebookId: user.id
-    }).then(user => {
-      if (user) {
-        res.status(401).json("User already exists");
-        done(null, user);
-      } else {
-        const newFacebookUser = new FacebookUser({
-          user: user.displayName,
-          facebookId: user.id
-        })
-          .save()
-          .then(user => {
-            res.json(user);
-            done(null, user);
-          })
-          .catch(err => {
-            res.json(err);
-          });
-      }
-    });
+    // console.log(req.user)
+    // res.status(200).json("hello");
+
+    res.redirect("/user");
   }
 );
 
 // serialize user to determine the data of the user object to be stored in the session
 passport.serializeUser((user, done) => {
-  done(null, user.id);
+  done(null, user);
 });
 
 // Take the id and the user from the ID
-passport.deserializeUser((id, done) => {
-  FacebookUser.findById(id).then(user => {
-    done(null, user);
-  });
+passport.deserializeUser((user, done) => {
+  console.log("iiiiiid");
+  FacebookUser.findById(user._id)
+    .then(user => {
+      done(null, user);
+    })
+    .catch(err => {
+      console.log(err);
+    });
 });
 
 // Use route
 app.get("/user", (req, res) => {
-  res.json({ user });
-  res.send("Welcome ", user.displayName);
+  console.log(req.session.passport.user.user);
+  res.json("hello");
 });
 
 // Listening app
