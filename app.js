@@ -4,6 +4,7 @@ const FacebookStrategy = require("passport-facebook").Strategy;
 const cors = require("cors");
 const keys = require("./config/keys");
 const session = require("express-session");
+const profile = require("./routes/api/profile");
 
 // Bring in cookie session
 const cookieSession = require("cookie-session");
@@ -45,23 +46,53 @@ mongoose
     console.log(err);
   });
 
+// Use cors for making cross origin requests
+// app.use(cors);
 // Initialize passport
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Use cookie session
+// Creating new facebook-passport strategy
+passport.use(cors());
+
+app.use((request, response, next) => {
+  response.header("Access-Control-Allow-Origin", "*");
+  response.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE");
+  response.header(
+    "Access-Control-Allow-Headers",
+    "Content-type, Accept, x-access-token, X-Key"
+  );
+  response.header("Access-Control-Allow-Credentials", true);
+  credentials: "same-origin";
+  if (request.method == "OPTIONS") {
+    response.status(200).end();
+  } else {
+    next();
+  }
+});
+
+// Use express session
+app.set("trust proxy", 1); // trust first proxy
 app.use(
-  cookieSession({
-    maxAge: 24 * 60 * 60 * 1000,
-    keys: [keys.cookieKey]
+  session({
+    secret: "keyboards",
+    resave: true,
+    saveUninitialized: true,
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: true,
+      secure: process.env.NODE_ENV === "production"
+    }
   })
 );
 
-// Use cors for making cross origin requests
-// app.use(cors);
-
-// Creating new facebook-passport strategy
-passport.use(cors());
+// Use cookie session
+// app.use(
+//   cookieSession({
+//     maxAge: 24 * 60 * 60 * 1000,
+//     keys: [keys.cookieKey]
+//   })
+// );
 
 // Facebook Strategy configuration
 passport.use(
@@ -108,7 +139,10 @@ passport.use(
 // Redirect the user to Facebook for authentication.  When complete,
 // Facebook will redirect the user back to the application at
 //     /auth/facebook/callback
-app.get("/auth/facebook", passport.authenticate("facebook"));
+app.get(
+  "/auth/facebook",
+  passport.authenticate("facebook", { failureRedirect: "/check" })
+);
 
 // Facebook will redirect the user to this URL after approval.  Finish the
 // authentication process by attempting to obtain an access token.  If
@@ -129,9 +163,6 @@ app.get(
   "/auth/facebook/callback",
   passport.authenticate("facebook", { failureRedirect: "/login" }),
   (req, res) => {
-    // console.log(req.user)
-    // res.status(200).json("hello");
-
     res.redirect("/user");
   }
 );
@@ -142,9 +173,9 @@ passport.serializeUser((user, done) => {
 });
 
 // Take the id and the user from the ID
-passport.deserializeUser((user, done) => {
+passport.deserializeUser((id, done) => {
   console.log("iiiiiid");
-  FacebookUser.findById(user._id)
+  FacebookUser.findById(user.id)
     .then(user => {
       done(null, user);
     })
@@ -154,10 +185,26 @@ passport.deserializeUser((user, done) => {
 });
 
 // Use route
-app.get("/user", (req, res) => {
-  console.log(req.session.passport.user.user);
-  res.json("hello");
+// app.get("/user", (req, res) => {
+//   console.log(req.session.passport.user.user);
+//   res.json("hello");
+// });
+
+// Extras route
+app.get("/check", (req, res) => {
+  res.json("bullshit");
 });
+
+// Logout users
+app.get("/logout", (req, res) => {
+  // req.logout();
+  req.session.destroy(err => {
+    res.send({ message: "Successfully logged out" });
+  });
+});
+
+// Use routes
+app.use("/user", profile);
 
 // Listening app
 const port = process.env.PORT || 5003;
