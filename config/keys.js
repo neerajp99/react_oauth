@@ -1,6 +1,9 @@
 module.exports = {
-  const FACEBOOK = {
-    clientID: "472433740154334",
-    clientSecret: "c8ad23e082c191357ea8f4d0f354811a"
-  }
-}
+  FACEBOOK: {
+    clientID: "Facebook Client ID",
+    clientSecret: "Client Secret"
+  },
+  mongoURI:
+    "Database connection string",
+  cookieKey: "cookie key"
+};
